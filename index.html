@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Strixhaven Arena Pro</title>
+
+<style>
+body { background:#0b0b0b; color:#eee; font-family:Arial; }
+h2 { margin:5px 0; }
+.container { display:flex; gap:10px; }
+
+.zone {
+  flex:1;
+  background:#111;
+  padding:10px;
+  border-radius:8px;
+  min-height:85vh;
+  overflow:auto;
+}
+
+.card {
+  width:120px;
+  margin:4px;
+  cursor:pointer;
+}
+
+.grid {
+  display:flex;
+  flex-wrap:wrap;
+}
+
+button {
+  padding:8px;
+  margin:5px 0;
+  width:100%;
+  background:#222;
+  color:#fff;
+  border:none;
+}
+
+.info {
+  background:#181818;
+  padding:10px;
+  margin-top:10px;
+}
+</style>
+</head>
+<body>
+
+<h1>🧙 Strixhaven Arena Pro</h1>
+
+<button onclick="autoBuild()">🤖 Gerar Deck IA</button>
+
+<div class="container">
+
+<div class="zone">
+<h2>📚 Coleção</h2>
+<div id="collection" class="grid"></div>
+</div>
+
+<div class="zone">
+<h2>🎴 Pool</h2>
+<div id="pool" class="grid"></div>
+</div>
+
+<div class="zone">
+<h2>⚔️ Deck</h2>
+<div id="deck" class="grid"></div>
+
+<div class="info" id="info"></div>
+</div>
+
+</div>
+
+<script>
+let cards = [];
+let stats = {};
+let pool = [];
+let deck = [];
+
+// ===== carregar cartas =====
+async function loadCards(){
+  let res = await fetch("https://api.scryfall.com/cards/search?q=set:stx");
+  let data = await res.json();
+
+  cards = data.data.map(c=>({
+    name:c.name,
+    cmc:c.cmc,
+    colors:c.colors,
+    type:c.type_line,
+    text:c.oracle_text || "",
+    img:c.image_uris?.normal,
+  }));
+
+  renderCollection();
+}
+
+// ===== 17lands =====
+async function loadStats(){
+  let res = await fetch("https://www.17lands.com/card_data?expansion=STX");
+  let data = await res.json();
+
+  data.forEach(c=>{
+    stats[c.name] = c.gih_wr || 0;
+  });
+}
+
+// ===== render =====
+function renderCollection(){
+  document.getElementById("collection").innerHTML =
+    cards.map((c,i)=>`
+      <img src="${c.img}" class="card"
+      onclick="addToPool(${i})">
+    `).join("");
+}
+
+function renderPool(){
+  document.getElementById("pool").innerHTML =
+    pool.map((c,i)=>`
+      <img src="${c.img}" class="card"
+      onclick="addToDeck(${i})">
+    `).join("");
+}
+
+function renderDeck(){
+  document.getElementById("deck").innerHTML =
+    deck.map((c,i)=>`
+      <img src="${c.img}" class="card"
+      onclick="removeFromDeck(${i})">
+    `).join("");
+}
+
+// ===== ações =====
+function addToPool(i){
+  pool.push(cards[i]);
+  renderPool();
+}
+
+function addToDeck(i){
+  deck.push(pool[i]);
+  renderDeck();
+}
+
+function removeFromDeck(i){
+  deck.splice(i,1);
+  renderDeck();
+}
+
+// ===== IA =====
+function score(c){
+
+  let s = 0;
+
+  if(stats[c.name]) s += stats[c.name] * 100;
+
+  s += (6 - c.cmc);
+
+  if(c.type.includes("Creature")) s+=2;
+  if(c.text.includes("destroy")) s+=4;
+
+  return s;
+}
+
+// ===== auto build =====
+function autoBuild(){
+
+  let temp = [...pool];
+
+  temp.forEach(c=>c.s = score(c));
+  temp.sort((a,b)=>b.s-a.s);
+
+  deck = temp.slice(0,23);
+
+  renderDeck();
+
+  explain(deck);
+}
+
+// ===== explicação =====
+function explain(deck){
+
+  let creatures = deck.filter(c=>c.type.includes("Creature")).length;
+  let avgCmc = deck.reduce((s,c)=>s+c.cmc,0)/deck.length;
+
+  let txt = `
+  🧠 IA escolheu:
+  <br>• Criaturas: ${creatures}
+  <br>• CMC médio: ${avgCmc.toFixed(2)}
+  <br><br>
+  🎯 Estratégia:
+  <br>Deck balanceado com foco em eficiência e curva.
+  <br>Baseado em dados reais (17Lands).
+  `;
+
+  document.getElementById("info").innerHTML = txt;
+}
+
+// ===== init =====
+loadCards();
+loadStats();
+</script>
+
+</body>
+</html>
